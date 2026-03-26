@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   BarChart3,
   FileText,
@@ -10,6 +11,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import FraudScoreBadge from "@/components/FraudScoreBadge";
 import {
   generateReport,
   fetchReportHistory,
@@ -20,6 +22,50 @@ import type {
   ReportFilters,
   UserResponse,
 } from "@/lib/api";
+
+/**
+ * Checks if an object looks like a claim record based on known claim fields.
+ * Used to decide whether to render items in a claims table or as raw data.
+ */
+function isClaimLike(item: unknown): item is Record<string, unknown> {
+  if (typeof item !== "object" || item === null || Array.isArray(item)) {
+    return false;
+  }
+  const obj = item as Record<string, unknown>;
+  // A claim-like object should have at least claim_number or claim_type and an id
+  return (
+    ("claim_number" in obj || "claim_type" in obj) &&
+    ("id" in obj || "claim_amount" in obj)
+  );
+}
+
+/**
+ * Determines the risk level string from a claim-like object.
+ * Falls back to score-based derivation if risk_level field is missing.
+ */
+function getClaimRiskLevel(claim: Record<string, unknown>): string {
+  if (typeof claim.risk_level === "string" && claim.risk_level) {
+    return claim.risk_level;
+  }
+  const score = typeof claim.fraud_score === "number" ? claim.fraud_score : 0;
+  if (score >= 70) return "high";
+  if (score >= 40) return "medium";
+  return "low";
+}
+
+/**
+ * Formats a currency value with dollar sign and locale grouping.
+ */
+function formatCurrency(value: unknown): string {
+  if (typeof value === "number") {
+    return `$${value.toLocaleString()}`;
+  }
+  if (typeof value === "string") {
+    const parsed = parseFloat(value);
+    if (!isNaN(parsed)) return `$${parsed.toLocaleString()}`;
+  }
+  return "$0";
+}
 
 /**
  * Reports page - generate filtered reports and view report history.
@@ -99,6 +145,94 @@ export default function ReportsPage() {
     setReport(null);
   };
 
+  /**
+   * Renders an array of claim-like objects as a styled, scrollable table
+   * reusing the same visual patterns as the main Claims list page.
+   */
+  const renderClaimsTable = (claims: Record<string, unknown>[]) => {
+    return (
+      <div style={{ overflowX: "auto", maxHeight: "500px", overflowY: "auto", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "10px 12px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-text-muted)", borderBottom: "2px solid var(--color-border)" }}>
+                Claim #
+              </th>
+              <th style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "10px 12px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-text-muted)", borderBottom: "2px solid var(--color-border)" }}>
+                Type
+              </th>
+              <th style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "10px 12px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-text-muted)", borderBottom: "2px solid var(--color-border)" }}>
+                Amount
+              </th>
+              <th style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "10px 12px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-text-muted)", borderBottom: "2px solid var(--color-border)" }}>
+                Fraud Score
+              </th>
+              <th style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "10px 12px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-text-muted)", borderBottom: "2px solid var(--color-border)" }}>
+                Status
+              </th>
+              <th style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "10px 12px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-text-muted)", borderBottom: "2px solid var(--color-border)" }}>
+                Incident Date
+              </th>
+              <th style={{ position: "sticky", top: 0, background: "var(--color-surface)", padding: "10px 12px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-text-muted)", borderBottom: "2px solid var(--color-border)" }}>
+                Location
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {claims.map((claim, idx) => {
+              const claimId = String(claim.id || "");
+              const claimNumber = String(claim.claim_number || `Claim-${idx + 1}`);
+              const claimType = String(claim.claim_type || "N/A");
+              const claimAmount = claim.claim_amount;
+              const fraudScore = typeof claim.fraud_score === "number" ? claim.fraud_score : 0;
+              const riskLevel = getClaimRiskLevel(claim);
+              const status = String(claim.status || "new");
+              const incidentDate = String(claim.incident_date || "N/A");
+              const location = claim.location ? String(claim.location) : "—";
+
+              return (
+                <tr key={claimId || idx} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                  <td style={{ padding: "10px 12px", fontSize: "0.8125rem" }}>
+                    {claimId ? (
+                      <Link
+                        href={`/claims/${claimId}`}
+                        style={{ color: "var(--color-primary)", textDecoration: "none", fontWeight: 500 }}
+                      >
+                        {claimNumber}
+                      </Link>
+                    ) : (
+                      <span style={{ fontWeight: 500 }}>{claimNumber}</span>
+                    )}
+                  </td>
+                  <td style={{ padding: "10px 12px", fontSize: "0.8125rem" }}>
+                    {claimType}
+                  </td>
+                  <td style={{ padding: "10px 12px", fontSize: "0.8125rem", fontWeight: 500 }}>
+                    {formatCurrency(claimAmount)}
+                  </td>
+                  <td style={{ padding: "10px 12px" }}>
+                    <FraudScoreBadge score={fraudScore} riskLevel={riskLevel} />
+                  </td>
+                  <td style={{ padding: "10px 12px" }}>
+                    <span className="badge badge-info" style={{ textTransform: "capitalize", fontSize: "0.75rem" }}>
+                      {status.replace(/_/g, " ")}
+                    </span>
+                  </td>
+                  <td style={{ padding: "10px 12px", color: "var(--color-text-muted)", fontSize: "0.8125rem" }}>
+                    {incidentDate}
+                  </td>
+                  <td style={{ padding: "10px 12px", color: "var(--color-text-muted)", fontSize: "0.8125rem" }}>
+                    {location}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   /** Render a report data section */
   const renderReportData = (data: Record<string, unknown>) => {
     return Object.entries(data).map(([key, value]) => {
@@ -121,19 +255,40 @@ export default function ReportsPage() {
         );
       }
 
+      // Handle arrays — detect claim-like items and render as a proper table
       if (Array.isArray(value)) {
+        const claimItems = value.filter(isClaimLike);
+        const isClaimsArray = claimItems.length > 0 && claimItems.length === value.length;
+
         return (
           <div key={key} style={{ marginBottom: "16px" }}>
             <h4 style={{ fontSize: "0.875rem", fontWeight: 600, marginBottom: "8px", textTransform: "capitalize" }}>
               {key.replace(/_/g, " ")} ({value.length})
             </h4>
-            <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-              {value.map((item, i) => (
-                <div key={i} style={{ padding: "6px 8px", fontSize: "0.8125rem", borderBottom: "1px solid var(--color-border)" }}>
-                  {typeof item === "object" ? JSON.stringify(item) : String(item)}
-                </div>
-              ))}
-            </div>
+            {isClaimsArray ? (
+              /* Render claim-like items as a structured table */
+              renderClaimsTable(claimItems)
+            ) : (
+              /* Fallback: render non-claim arrays as simple list items */
+              <div style={{ maxHeight: "200px", overflowY: "auto", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
+                {value.map((item, i) => (
+                  <div key={i} style={{ padding: "8px 12px", fontSize: "0.8125rem", borderBottom: "1px solid var(--color-border)", background: i % 2 === 0 ? "var(--color-surface)" : "transparent" }}>
+                    {typeof item === "object" && item !== null ? (
+                      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                        {Object.entries(item as Record<string, unknown>).map(([k, v]) => (
+                          <span key={k} style={{ color: "var(--color-text-muted)" }}>
+                            <span style={{ fontWeight: 500, color: "var(--color-text)" }}>{k.replace(/_/g, " ")}:</span>{" "}
+                            {String(v)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      String(item)
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       }
