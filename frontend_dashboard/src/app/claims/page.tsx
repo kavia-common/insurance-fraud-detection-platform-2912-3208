@@ -23,6 +23,8 @@ import type { ClaimResponse, ClaimCreate, CSVUploadResponse } from "@/lib/api";
 /**
  * Claims list page - displays all claims in a searchable, filterable table.
  * Supports CSV upload and manual claim entry via modal forms.
+ * Manual entry and CSV upload now support claimant_name, claimant_address,
+ * policy_number, and third_parties fields per the updated backend API.
  */
 export default function ClaimsPage() {
   const [claims, setClaims] = useState<ClaimResponse[]>([]);
@@ -82,19 +84,28 @@ export default function ClaimsPage() {
     }
   };
 
-  /** Handle manual claim creation */
+  /**
+   * Handle manual claim creation.
+   * Reads all form fields including the new claimant_name, claimant_address,
+   * policy_number, and third_parties fields.
+   */
   const handleCreateClaim = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+
     const data: ClaimCreate = {
       claim_number: formData.get("claim_number") as string,
       claim_type: formData.get("claim_type") as string,
       claim_amount: parseFloat(formData.get("claim_amount") as string),
       incident_date: formData.get("incident_date") as string,
+      claimant_name: (formData.get("claimant_name") as string) || null,
+      claimant_address: (formData.get("claimant_address") as string) || null,
+      policy_number: (formData.get("policy_number") as string) || null,
       description: (formData.get("description") as string) || null,
       location: (formData.get("location") as string) || null,
       police_report_filed: formData.get("police_report_filed") === "true",
       witnesses: parseInt(formData.get("witnesses") as string) || 0,
+      third_parties: (formData.get("third_parties") as string) || null,
     };
 
     try {
@@ -188,6 +199,8 @@ export default function ClaimsPage() {
               <thead>
                 <tr>
                   <th>Claim #</th>
+                  <th>Claimant</th>
+                  <th>Policy #</th>
                   <th>Type</th>
                   <th>Amount</th>
                   <th>Fraud Score</th>
@@ -207,6 +220,12 @@ export default function ClaimsPage() {
                         >
                           {claim.claim_number}
                         </Link>
+                      </td>
+                      <td style={{ fontSize: "0.8125rem" }}>
+                        {claim.claimant_name || "—"}
+                      </td>
+                      <td style={{ fontSize: "0.8125rem" }}>
+                        {claim.policy_number || "—"}
                       </td>
                       <td>{claim.claim_type}</td>
                       <td style={{ fontWeight: 500 }}>${claim.claim_amount.toLocaleString()}</td>
@@ -228,7 +247,7 @@ export default function ClaimsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "40px", color: "var(--color-text-muted)" }}>
+                    <td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "var(--color-text-muted)" }}>
                       No claims found matching your filters
                     </td>
                   </tr>
@@ -276,7 +295,12 @@ export default function ClaimsPage() {
                   <label>CSV File</label>
                   <input type="file" name="file" accept=".csv" required />
                   <p style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "8px" }}>
-                    Expected columns: claim_number, claim_type, claim_amount, incident_date, description, location, police_report_filed, witnesses
+                    Expected columns: claim_number, claimant_name, claimant_address, policy_number,
+                    claim_type, claim_amount, incident_date, description, location,
+                    police_report_filed, witnesses, third_parties
+                  </p>
+                  <p style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "4px" }}>
+                    Optional columns: policy_id, policyholder_id, police_report_number, filed_date
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
@@ -293,10 +317,10 @@ export default function ClaimsPage() {
         </div>
       )}
 
-      {/* Create Claim Modal */}
+      {/* Create Claim Modal – includes new fields: claimant_name, claimant_address, policy_number, third_parties */}
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
               <h2 style={{ fontSize: "1.125rem", fontWeight: 600 }}>New Claim</h2>
               <button onClick={() => setShowCreateModal(false)} style={{ background: "none", border: "none", cursor: "pointer" }}>
@@ -305,6 +329,7 @@ export default function ClaimsPage() {
             </div>
             <form onSubmit={handleCreateClaim}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                {/* Row 1: Claim Number, Claim Type */}
                 <div>
                   <label>Claim Number *</label>
                   <input type="text" name="claim_number" required placeholder="CLM-001" />
@@ -323,6 +348,24 @@ export default function ClaimsPage() {
                     <option value="Other">Other</option>
                   </select>
                 </div>
+
+                {/* Row 2: Claimant Name, Policy Number */}
+                <div>
+                  <label>Claimant Name</label>
+                  <input type="text" name="claimant_name" placeholder="Full name of claimant" />
+                </div>
+                <div>
+                  <label>Policy Number</label>
+                  <input type="text" name="policy_number" placeholder="POL-12345" />
+                </div>
+
+                {/* Row 3: Claimant Address (full width) */}
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label>Claimant Address</label>
+                  <input type="text" name="claimant_address" placeholder="123 Main St, City, State, ZIP" />
+                </div>
+
+                {/* Row 4: Claim Amount, Incident Date */}
                 <div>
                   <label>Claim Amount ($) *</label>
                   <input type="number" name="claim_amount" required min="0" step="0.01" placeholder="10000" />
@@ -331,10 +374,14 @@ export default function ClaimsPage() {
                   <label>Incident Date *</label>
                   <input type="date" name="incident_date" required />
                 </div>
+
+                {/* Row 5: Description (full width) */}
                 <div style={{ gridColumn: "1 / -1" }}>
                   <label>Description</label>
                   <textarea name="description" rows={3} placeholder="Describe the incident..." />
                 </div>
+
+                {/* Row 6: Location, Witnesses */}
                 <div>
                   <label>Location</label>
                   <input type="text" name="location" placeholder="City, State" />
@@ -343,12 +390,18 @@ export default function ClaimsPage() {
                   <label>Witnesses</label>
                   <input type="number" name="witnesses" min="0" defaultValue="0" />
                 </div>
+
+                {/* Row 7: Police Report, Third Parties */}
                 <div>
                   <label>Police Report Filed</label>
                   <select name="police_report_filed">
                     <option value="false">No</option>
                     <option value="true">Yes</option>
                   </select>
+                </div>
+                <div>
+                  <label>Third Parties</label>
+                  <input type="text" name="third_parties" placeholder="e.g., John Doe, ABC Corp" />
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "20px" }}>

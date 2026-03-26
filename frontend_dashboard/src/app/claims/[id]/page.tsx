@@ -119,6 +119,7 @@ export default function ClaimDetailPage() {
           </h1>
           <p style={{ color: "var(--color-text-muted)", fontSize: "0.875rem", marginTop: "4px" }}>
             {claim.claim_type} Claim · Filed {claim.filed_date || claim.incident_date}
+            {claim.claimant_name && <> · Claimant: {claim.claimant_name}</>}
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
@@ -202,38 +203,66 @@ export default function ClaimDetailPage() {
 
       {/* Tab Content */}
       {activeTab === "details" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-          <div className="card">
-            <h3 style={{ fontSize: "0.9375rem", fontWeight: 600, marginBottom: "16px" }}>Claim Information</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <DetailRow icon={FileText} label="Claim Number" value={claim.claim_number} />
-              <DetailRow icon={FileText} label="Type" value={claim.claim_type} />
-              <DetailRow icon={DollarSign} label="Amount" value={`$${claim.claim_amount.toLocaleString()}`} />
-              <DetailRow icon={Calendar} label="Incident Date" value={claim.incident_date} />
-              <DetailRow icon={Calendar} label="Filed Date" value={claim.filed_date || "N/A"} />
-              <DetailRow icon={MapPin} label="Location" value={claim.location || "N/A"} />
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Top row: Claim Info + Claimant & Policy Info */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div className="card">
+              <h3 style={{ fontSize: "0.9375rem", fontWeight: 600, marginBottom: "16px" }}>Claim Information</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <DetailRow icon={FileText} label="Claim Number" value={claim.claim_number} />
+                <DetailRow icon={FileText} label="Type" value={claim.claim_type} />
+                <DetailRow icon={DollarSign} label="Amount" value={`$${claim.claim_amount.toLocaleString()}`} />
+                <DetailRow icon={Calendar} label="Incident Date" value={claim.incident_date} />
+                <DetailRow icon={Calendar} label="Filed Date" value={claim.filed_date || "N/A"} />
+                <DetailRow icon={MapPin} label="Location" value={claim.location || "N/A"} />
+              </div>
+            </div>
+            <div className="card">
+              <h3 style={{ fontSize: "0.9375rem", fontWeight: 600, marginBottom: "16px" }}>Claimant &amp; Policy</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <DetailRow icon={Users} label="Claimant Name" value={claim.claimant_name || "N/A"} />
+                <DetailRow icon={MapPin} label="Claimant Address" value={claim.claimant_address || "N/A"} />
+                <DetailRow icon={Shield} label="Policy Number" value={claim.policy_number || "N/A"} />
+                {claim.third_parties && (
+                  <div style={{ marginTop: "4px" }}>
+                    <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Users size={15} /> Third Parties
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                      {claim.third_parties.split(",").map((tp, idx) => (
+                        <span key={idx} className="badge badge-neutral" style={{ fontSize: "0.8125rem" }}>
+                          {tp.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <div className="card">
-            <h3 style={{ fontSize: "0.9375rem", fontWeight: 600, marginBottom: "16px" }}>Additional Details</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <DetailRow
-                icon={Shield}
-                label="Police Report"
-                value={claim.police_report_filed ? `Yes (${claim.police_report_number || "No #"})` : "No"}
-              />
-              <DetailRow icon={Users} label="Witnesses" value={String(claim.witnesses || 0)} />
-              <DetailRow icon={FileText} label="Ingestion Source" value={claim.ingestion_source || "manual"} />
-              <DetailRow icon={Calendar} label="Created" value={claim.created_at || "N/A"} />
-            </div>
-            {claim.description && (
-              <div style={{ marginTop: "16px" }}>
-                <div style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)", marginBottom: "4px" }}>
-                  Description
-                </div>
-                <p style={{ fontSize: "0.875rem", lineHeight: "1.5" }}>{claim.description}</p>
+          {/* Bottom row: Additional Details */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div className="card">
+              <h3 style={{ fontSize: "0.9375rem", fontWeight: 600, marginBottom: "16px" }}>Additional Details</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <DetailRow
+                  icon={Shield}
+                  label="Police Report"
+                  value={claim.police_report_filed ? `Yes (${claim.police_report_number || "No #"})` : "No"}
+                />
+                <DetailRow icon={Users} label="Witnesses" value={String(claim.witnesses || 0)} />
+                <DetailRow icon={FileText} label="Ingestion Source" value={claim.ingestion_source || "manual"} />
+                <DetailRow icon={Calendar} label="Created" value={claim.created_at || "N/A"} />
               </div>
-            )}
+              {claim.description && (
+                <div style={{ marginTop: "16px" }}>
+                  <div style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)", marginBottom: "4px" }}>
+                    Description
+                  </div>
+                  <p style={{ fontSize: "0.875rem", lineHeight: "1.5" }}>{claim.description}</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
