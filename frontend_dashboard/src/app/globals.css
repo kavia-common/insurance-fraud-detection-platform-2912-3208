@@ -217,6 +217,11 @@
     height: 32px;
     animation: spin 0.8s linear infinite;
   }
+
+  /* Spinning icon utility – used on inline icons (e.g. RefreshCw) during async actions */
+  .spinning {
+    animation: spin 0.8s linear infinite;
+  }
 }
 
 /* ===== Utility Animations ===== */

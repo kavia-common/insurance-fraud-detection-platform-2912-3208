@@ -17,14 +17,15 @@ import {
   fetchClaims,
   uploadClaimsCSV,
   createClaim,
+  rescoreClaim,
 } from "@/lib/api";
 import type { ClaimResponse, ClaimCreate, CSVUploadResponse } from "@/lib/api";
 
 /**
  * Claims list page - displays all claims in a searchable, filterable table.
- * Supports CSV upload and manual claim entry via modal forms.
- * Manual entry and CSV upload now support claimant_name, claimant_address,
- * policy_number, and third_parties fields per the updated backend API.
+ * Supports CSV upload, manual claim entry via modal forms, and per-row
+ * Score/Re-score buttons that call the backend scoring endpoint and
+ * refresh the displayed fraud_score immediately.
  */
 export default function ClaimsPage() {
   const [claims, setClaims] = useState<ClaimResponse[]>([]);
@@ -35,6 +36,9 @@ export default function ClaimsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [riskFilter, setRiskFilter] = useState("");
+
+  // Scoring state: track claim IDs currently being scored
+  const [scoringIds, setScoringIds] = useState<Set<string>>(new Set());
 
   // Modals
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -85,8 +89,29 @@ export default function ClaimsPage() {
   };
 
   /**
+   * Handle scoring/re-scoring a single claim.
+   * Calls POST /api/claims/{id}/score then refreshes the claims list so the
+   * updated fraud_score is immediately visible in the table.
+   */
+  const handleScoreClaim = async (claimId: string) => {
+    try {
+      setScoringIds((prev) => new Set(prev).add(claimId));
+      await rescoreClaim(claimId);
+      await loadClaims();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to score claim");
+    } finally {
+      setScoringIds((prev) => {
+        const next = new Set(prev);
+        next.delete(claimId);
+        return next;
+      });
+    }
+  };
+
+  /**
    * Handle manual claim creation.
-   * Reads all form fields including the new claimant_name, claimant_address,
+   * Reads all form fields including claimant_name, claimant_address,
    * policy_number, and third_parties fields.
    */
   const handleCreateClaim = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -207,6 +232,7 @@ export default function ClaimsPage() {
                   <th>Status</th>
                   <th>Incident Date</th>
                   <th>Source</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -243,11 +269,41 @@ export default function ClaimsPage() {
                       <td>
                         <span className="badge badge-neutral">{claim.ingestion_source || "manual"}</span>
                       </td>
+                      <td>
+                        <button
+                          className="btn btn-secondary"
+                          style={{
+                            padding: "4px 10px",
+                            fontSize: "0.75rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            whiteSpace: "nowrap",
+                          }}
+                          disabled={scoringIds.has(claim.id)}
+                          onClick={() => handleScoreClaim(claim.id)}
+                          title={
+                            claim.fraud_score > 0
+                              ? "Re-score this claim against all active fraud rules"
+                              : "Score this claim against all active fraud rules"
+                          }
+                        >
+                          <RefreshCw
+                            size={12}
+                            className={scoringIds.has(claim.id) ? "spinning" : ""}
+                          />
+                          {scoringIds.has(claim.id)
+                            ? "Scoring..."
+                            : claim.fraud_score > 0
+                              ? "Re-score"
+                              : "Score"}
+                        </button>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "var(--color-text-muted)" }}>
+                    <td colSpan={10} style={{ textAlign: "center", padding: "40px", color: "var(--color-text-muted)" }}>
                       No claims found matching your filters
                     </td>
                   </tr>
@@ -317,7 +373,7 @@ export default function ClaimsPage() {
         </div>
       )}
 
-      {/* Create Claim Modal – includes new fields: claimant_name, claimant_address, policy_number, third_parties */}
+      {/* Create Claim Modal – includes fields: claimant_name, claimant_address, policy_number, third_parties */}
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxHeight: "90vh", overflowY: "auto" }}>

@@ -33,7 +33,7 @@ import type {
 
 /**
  * Claim detail page - shows full claim info, fraud score with triggered signals,
- * network relationships, and action buttons for re-scoring and assignment.
+ * network relationships, and action buttons for scoring/re-scoring and assignment.
  */
 export default function ClaimDetailPage() {
   const params = useParams();
@@ -71,14 +71,18 @@ export default function ClaimDetailPage() {
     loadData();
   }, [loadData]);
 
-  /** Handle fraud re-scoring */
+  /**
+   * Handle fraud scoring / re-scoring.
+   * Calls POST /api/claims/{id}/score then reloads claim data and signals
+   * so the updated fraud_score is reflected immediately.
+   */
   const handleRescore = async () => {
     try {
       setRescoring(true);
       await rescoreClaim(claimId);
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Re-scoring failed");
+      setError(err instanceof Error ? err.message : "Scoring failed");
     } finally {
       setRescoring(false);
     }
@@ -123,9 +127,14 @@ export default function ClaimDetailPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className="btn btn-secondary" onClick={handleRescore} disabled={rescoring}>
+          <button
+            className="btn btn-secondary"
+            onClick={handleRescore}
+            disabled={rescoring}
+            title="Score this claim against all active fraud rules and update the fraud score"
+          >
             <RefreshCw size={16} className={rescoring ? "spinning" : ""} />
-            {rescoring ? "Scoring..." : "Re-Score"}
+            {rescoring ? "Scoring..." : (claim.fraud_score > 0 ? "Re-Score" : "Score")}
           </button>
           <Link href={`/assignments?claim_id=${claim.id}`} className="btn btn-primary" style={{ textDecoration: "none" }}>
             <Users size={16} /> Assign
@@ -307,7 +316,7 @@ export default function ClaimDetailPage() {
               ) : (
                 <tr>
                   <td colSpan={4} style={{ textAlign: "center", padding: "40px", color: "var(--color-text-muted)" }}>
-                    No fraud signals evaluated yet. Click &quot;Re-Score&quot; to evaluate.
+                    No fraud signals evaluated yet. Click &quot;Score&quot; to evaluate this claim.
                   </td>
                 </tr>
               )}
